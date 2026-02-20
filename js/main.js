@@ -1,243 +1,142 @@
-/**
- * Main: Endless game state, loop, persistence, score tracking
- */
-
-import { ENDLESS_CONFIG, generateObstacles } from './levels.js';
+import { createInput } from './input.js';
 import {
-  getStoredSteeringMode,
-  setStoredSteeringMode,
-  createCombinedInput,
-} from './input.js';
-import {
-  createCarState,
-  resetCarToSpawn,
-  updateCarPhysics,
-  carVsObstacles,
-  carLeavesRoad,
-  getSpeedKmh,
+  createCar,
+  resetCar,
+  updateCar,
+  checkCollisions,
+  checkOffRoad,
+  spawnObstacle,
 } from './game.js';
 import {
   initRenderer,
   buildLevel,
-  updateCarVisual,
-  updateCameraFollow,
+  drawCar,
+  drawObstacles,
+  drawCamera,
   render,
-  addObstacle,
-  addCoin,
-  updateCoins,
 } from './renderer.js';
-import { carVsCoin, generateCoinsForSegment } from './coins.js';
-import {
-  initAudio,
-  playEngineSound,
-  playCoinPickup,
-  playCrashSound,
-} from './audio.js';
+import { initAudio, playEngineSound, playCrashSound } from './audio.js';
 
-// --- DOM ---
-const screens = {
-  main: document.getElementById('main-menu'),
-  settings: document.getElementById('settings'),
-  game: document.getElementById('game-screen'),
-};
+// DOM elements
+const canvas = document.getElementById('game-canvas');
+const gameScreen = document.getElementById('game-screen');
+const mainMenu = document.getElementById('main-menu');
 const resultOverlay = document.getElementById('result-overlay');
 const resultMessage = document.getElementById('result-message');
-const touchControls = document.getElementById('touch-controls');
 const speedDisplay = document.getElementById('speed-display');
 const scoreDisplay = document.getElementById('score-display');
-const coinsDisplay = document.getElementById('coins-display');
+const flyDisplay = document.getElementById('fly-display');
 
-function showScreen(name) {
-  Object.keys(screens).forEach((k) => {
-    screens[k].classList.toggle('hidden', k !== name);
-  });
-}
-
-// --- Settings UI ---
-function refreshSettingsUI() {
-  const mode = getStoredSteeringMode();
-  document.getElementById('steer-touch').classList.toggle('active', mode === 'touch');
-  document.getElementById('steer-tilt').classList.toggle('active', mode === 'tilt');
-}
-
-document.getElementById('steer-touch').addEventListener('click', () => {
-  setStoredSteeringMode('touch');
-  refreshSettingsUI();
-});
-document.getElementById('steer-tilt').addEventListener('click', () => {
-  setStoredSteeringMode('tilt');
-  refreshSettingsUI();
-});
-
-// --- Navigation ---
-document.getElementById('btn-play').addEventListener('click', () => {
-  startGame();
-});
-document.getElementById('btn-settings').addEventListener('click', () => {
-  refreshSettingsUI();
-  showScreen('settings');
-});
-document.getElementById('btn-settings-back').addEventListener('click', () => showScreen('main'));
-
-// --- Game state ---
-let canvas;
-let gameInput;
+// Game state
+let input;
 let car;
-let gameRunning = false;
-let gamePaused = false;
-let lastTime = 0;
-let rafId;
-
-// Endless game state
 let obstacles = [];
-let coins = [];
 let score = 0;
-let coinsCollected = 0;
-let lastSegmentZ = -100;
+let distance = 0;
+let gameActive = false;
+let lastSpawnZ = 0;
+let lastFrameTime = 0;
 
-function startGame() {
-  if (!canvas) {
-    canvas = document.getElementById('game-canvas');
-    initRenderer(canvas);
+function resetGame() {
+  car = createCar();
+  resetCar(car);
+  obstacles = [];
+  score = 0;
+  distance = 0;
+  lastSpawnZ = 50; // Start spawning obstacles after 50 units
+}
+
+function spawnObstacles() {
+  while (lastSpawnZ < car.z + 100) {
+    obstacles.push(spawnObstacle(lastSpawnZ));
+    lastSpawnZ += 20 + Math.random() * 20;
+  }
+}
+
+function gameLoop(timestamp) {
+  if (!gameActive) return;
+
+  if (!lastFrameTime) lastFrameTime = timestamp;
+  const dt = Math.min(timestamp - lastFrameTime, 33);
+  lastFrameTime = timestamp;
+
+  // Get input
+  const moveLeft = input.getLeft();
+  const moveRight = input.getRight();
+  const doFly = input.getFly();
+
+  console.log('INPUT:', { moveLeft, moveRight, doFly, lane: car.lane });
+
+  // Update car
+  updateCar(car, dt, moveLeft, moveRight, doFly);
+
+  // Spawn obstacles
+  spawnObstacles();
+
+  // Remove far obstacles
+  obstacles = obstacles.filter(o => o.z < car.z + 100);
+
+  // Check collisions
+  if (checkCollisions(car, obstacles)) {
+    gameActive = false;
+    playCrashSound();
+    resultMessage.textContent = `Game Over! Distance: ${Math.round(car.z)}m | Score: ${score}`;
+    resultOverlay.classList.remove('hidden');
+    return;
   }
 
-  initAudio();
+  if (checkOffRoad(car)) {
+    gameActive = false;
+    playCrashSound();
+    resultMessage.textContent = `Off Road! Distance: ${Math.round(car.z)}m | Score: ${score}`;
+    resultOverlay.classList.remove('hidden');
+    return;
+  }
 
-  if (gameInput) gameInput.destroy();
-  const steeringMode = getStoredSteeringMode();
-  gameInput = createCombinedInput(steeringMode);
-
-  touchControls.classList.remove('hidden');
+  // Update score
+  score += Math.round(car.z / 100);
   
-  buildLevel(ENDLESS_CONFIG.roadWidth);
-  car = createCarState();
-  resetCarToSpawn(car, ENDLESS_CONFIG.spawn);
+  // Update HUD
+  speedDisplay.textContent = '13 km/h';
+  scoreDisplay.textContent = `Score: ${score}`;
+  flyDisplay.textContent = car.flying ? `Flying: ${Math.round((car.flyTimer / car.maxFlyTime) * 100)}%` : 'Press SPACE to fly';
 
-  // Initialize endless game
-  obstacles = [];
-  coins = [];
-  score = 0;
-  coinsCollected = 0;
-  lastSegmentZ = -100;
-  
-  // Generate first segments
-  generateNextSegment();
+  // Render
+  drawCar(car);
+  drawObstacles(obstacles);
+  drawCamera(car);
+  render();
 
-  resultOverlay.classList.add('hidden');
-  resultOverlay.classList.remove('win', 'fail');
-  gameRunning = true;
-  gamePaused = false;
-  showScreen('game');
-  lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
 
-function generateNextSegment() {
-  const zStart = lastSegmentZ;
-  const zEnd = zStart + 100;
-  
-  const newObstacles = generateObstacles(zStart, zEnd, ENDLESS_CONFIG.roadWidth);
-  newObstacles.forEach((o) => {
-    obstacles.push(o);
-    addObstacle(o);
-  });
-
-  const newCoins = generateCoinsForSegment(zStart, zEnd, ENDLESS_CONFIG.roadWidth);
-  newCoins.forEach((c) => {
-    coins.push(c);
-    addCoin(c);
-  });
-
-  lastSegmentZ = zEnd;
+function startGame() {
+  resetGame();
+  gameActive = true;
+  lastFrameTime = 0;
+  gameScreen.classList.remove('hidden');
+  mainMenu.classList.add('hidden');
+  resultOverlay.classList.add('hidden');
+  requestAnimationFrame(gameLoop);
 }
 
-function endGame() {
-  gameRunning = false;
-  if (rafId) cancelAnimationFrame(rafId);
-  playEngineSound(0);
-  playCrashSound();
-  
-  resultOverlay.classList.remove('hidden');
-  resultOverlay.classList.add('fail');
-  resultMessage.textContent = `Crashed! Score: ${score} | Coins: ${coinsCollected}`;
-}
+// Event listeners
+document.getElementById('btn-play').addEventListener('click', startGame);
+document.getElementById('btn-retry').addEventListener('click', startGame);
 
-function gameLoop(now) {
-  rafId = requestAnimationFrame(gameLoop);
-  if (!gameRunning || gamePaused) return;
-
-  const dt = Math.min(now - lastTime, 50);
-  lastTime = now;
-
-  const steer = gameInput.getSteer();
-  const accel = gameInput.getAccel();
-  const brake = gameInput.getBrake();
-
-  updateCarPhysics(car, steer, accel, brake, dt);
-
-  // Update engine sound based on speed
-  const kmh = getSpeedKmh(car);
-  playEngineSound(kmh / 50); // Normalized 0-1
-
-  // Score increases with distance traveled
-  score += Math.round(kmh / 10);
-
-  // Collect coins
-  coins.forEach((coin) => {
-    if (!coin.collected && carVsCoin(car, coin)) {
-      coin.collected = true;
-      coinsCollected++;
-      playCoinPickup();
-      score += 100;
-    }
-  });
-
-  // Check collisions
-  if (carVsObstacles(car, obstacles)) {
-    endGame();
-    return;
-  }
-  
-  if (carLeavesRoad(car, ENDLESS_CONFIG.roadWidth)) {
-    endGame();
-    return;
-  }
-
-  // Generate new segments as needed
-  if (car.z > lastSegmentZ - 50) {
-    generateNextSegment();
-  }
-
-  // Clean up old obstacles and coins
-  obstacles = obstacles.filter((o) => o.z > car.z - 50);
-  coins = coins.filter((c) => !c.collected && c.z > car.z - 50);
-
-  updateCarVisual(car);
-  updateCameraFollow(car);
-  updateCoins(coins);
-  speedDisplay.textContent = kmh + ' km/h';
-  scoreDisplay.textContent = 'Score: ' + score;
-  coinsDisplay.textContent = 'Coins: ' + coinsCollected;
-  render();
-}
-
-document.getElementById('btn-restart').addEventListener('click', () => {
-  startGame();
-});
-document.getElementById('btn-pause').addEventListener('click', () => {
-  gamePaused = !gamePaused;
-  document.getElementById('btn-pause').textContent = gamePaused ? 'Resume' : 'Pause';
-});
-document.getElementById('btn-retry').addEventListener('click', () => {
-  startGame();
-});
-document.getElementById('btn-level-select').addEventListener('click', () => {
-  if (gameInput) gameInput.destroy();
-  gameRunning = false;
-  if (rafId) cancelAnimationFrame(rafId);
-  showScreen('main');
+document.getElementById('btn-menu').addEventListener('click', () => {
+  gameActive = false;
+  mainMenu.classList.remove('hidden');
+  gameScreen.classList.add('hidden');
 });
 
-// Start on main menu
-refreshSettingsUI();
-showScreen('main');
+// Initialize
+initRenderer(canvas);
+buildLevel();
+initAudio();
+input = createInput();
+playEngineSound(0.5);
+
+console.log('Game initialized!');
+mainMenu.classList.remove('hidden');
+gameScreen.classList.add('hidden');

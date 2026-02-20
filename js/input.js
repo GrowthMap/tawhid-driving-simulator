@@ -1,205 +1,72 @@
-/**
- * Input abstraction: getSteer(), getAccel(), getBrake()
- * Implementations: keyboard, touch, tilt
- */
+// Simple input handling
+const keys = {
+  left: false,
+  right: false,
+  fly: false,
+};
 
-const STORAGE_KEY = 'driving_steeringMode';
-
-export function getStoredSteeringMode() {
-  return localStorage.getItem(STORAGE_KEY) || 'touch';
-}
-
-export function setStoredSteeringMode(mode) {
-  localStorage.setItem(STORAGE_KEY, mode);
-}
-
-// --- Keyboard ---
-const keys = { steerLeft: false, steerRight: false, accel: false, brake: false };
-
-function onKeyDown(e) {
-  switch (e.code) {
-    case 'ArrowLeft':
-    case 'KeyA':
-      keys.steerLeft = true;
-      e.preventDefault();
-      break;
-    case 'ArrowRight':
-    case 'KeyD':
-      keys.steerRight = true;
-      e.preventDefault();
-      break;
-    case 'ArrowUp':
-    case 'KeyW':
-      keys.accel = true;
-      e.preventDefault();
-      break;
-    case 'ArrowDown':
-    case 'KeyS':
-      keys.brake = true;
-      e.preventDefault();
-      break;
+export function createInput() {
+  // Keyboard
+  function onKeyDown(e) {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+      keys.left = true;
+      console.log('KEY DOWN: LEFT');
+    }
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+      keys.right = true;
+      console.log('KEY DOWN: RIGHT');
+    }
+    if (e.code === 'Space') {
+      keys.fly = true;
+      console.log('KEY DOWN: FLY');
+    }
   }
-}
 
-function onKeyUp(e) {
-  switch (e.code) {
-    case 'ArrowLeft':
-    case 'KeyA':
-      keys.steerLeft = false;
-      break;
-    case 'ArrowRight':
-    case 'KeyD':
-      keys.steerRight = false;
-      break;
-    case 'ArrowUp':
-    case 'KeyW':
-      keys.accel = false;
-      break;
-    case 'ArrowDown':
-    case 'KeyS':
-      keys.brake = false;
-      break;
+  function onKeyUp(e) {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+    if (e.code === 'Space') keys.fly = false;
   }
-}
 
-export function createKeyboardInput() {
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
-  return {
-    getSteer() {
-      let s = 0;
-      if (keys.steerLeft) s -= 1;
-      if (keys.steerRight) s += 1;
-      return s;
-    },
-    getAccel() {
-      return keys.accel ? 1 : 0;
-    },
-    getBrake() {
-      return keys.brake ? 1 : 0;
-    },
-    destroy() {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-    },
-  };
-}
+  // Touch buttons
+  const leftBtn = document.getElementById('steer-left');
+  const rightBtn = document.getElementById('steer-right');
+  const flyBtn = document.getElementById('fly-btn');
 
-// --- Touch (state from buttons) ---
-const touchState = { steerLeft: false, steerRight: false, accel: false, brake: false };
-
-function setTouchKey(id, value) {
-  if (id === 'steer-left') touchState.steerLeft = value;
-  else if (id === 'steer-right') touchState.steerRight = value;
-  else if (id === 'gas') touchState.accel = value;
-  else if (id === 'brake') touchState.brake = value;
-}
-
-function addTouchListeners(element) {
-  element.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    setTouchKey(element.id, true);
-  }, { passive: false });
-  element.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    setTouchKey(element.id, false);
-  }, { passive: false });
-  element.addEventListener('mousedown', () => setTouchKey(element.id, true));
-  element.addEventListener('mouseup', () => setTouchKey(element.id, false));
-  element.addEventListener('mouseleave', () => setTouchKey(element.id, false));
-}
-
-export function createTouchInput() {
-  const ids = ['steer-left', 'steer-right', 'gas', 'brake'];
-  ids.forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) addTouchListeners(el);
-  });
-  return {
-    getSteer() {
-      let s = 0;
-      if (touchState.steerLeft) s -= 1;
-      if (touchState.steerRight) s += 1;
-      return s;
-    },
-    getAccel() {
-      return touchState.accel ? 1 : 0;
-    },
-    getBrake() {
-      return touchState.brake ? 1 : 0;
-    },
-    destroy() {},
-  };
-}
-
-// --- Tilt (DeviceOrientation) ---
-let tiltSteer = 0;
-const TILT_SENSITIVITY = 3;
-const TILT_DEADZONE = 5;
-
-function onDeviceOrientation(e) {
-  // gamma: left-right tilt (-90 to 90)
-  const g = e.gamma != null ? e.gamma : 0;
-  const raw = Math.max(-1, Math.min(1, g / 30));
-  if (Math.abs(raw * 30) < TILT_DEADZONE) {
-    tiltSteer = 0;
-  } else {
-    tiltSteer = raw * TILT_SENSITIVITY;
+  if (leftBtn) {
+    leftBtn.addEventListener('touchstart', () => { keys.left = true; }, false);
+    leftBtn.addEventListener('touchend', () => { keys.left = false; }, false);
+    leftBtn.addEventListener('mousedown', () => { keys.left = true; });
+    leftBtn.addEventListener('mouseup', () => { keys.left = false; });
+    leftBtn.addEventListener('mouseleave', () => { keys.left = false; });
   }
-}
 
-export function createTiltInput() {
-  tiltSteer = 0;
-  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission()
-      .then((permission) => {
-        if (permission === 'granted') {
-          window.addEventListener('deviceorientation', onDeviceOrientation);
-        }
-      })
-      .catch(() => {});
-  } else {
-    window.addEventListener('deviceorientation', onDeviceOrientation);
+  if (rightBtn) {
+    rightBtn.addEventListener('touchstart', () => { keys.right = true; }, false);
+    rightBtn.addEventListener('touchend', () => { keys.right = false; }, false);
+    rightBtn.addEventListener('mousedown', () => { keys.right = true; });
+    rightBtn.addEventListener('mouseup', () => { keys.right = false; });
+    rightBtn.addEventListener('mouseleave', () => { keys.right = false; });
   }
-  return {
-    getSteer() {
-      return Math.max(-1, Math.min(1, tiltSteer));
-    },
-    getAccel() {
-      return 0; // tilt typically only steering; use on-screen or keyboard for gas/brake
-    },
-    getBrake() {
-      return 0;
-    },
-    destroy() {
-      window.removeEventListener('deviceorientation', onDeviceOrientation);
-    },
-  };
-}
 
-// Combined: use one steering mode for steer; accel/brake always from keyboard + touch buttons
-export function createCombinedInput(steeringMode) {
-  const keyboard = createKeyboardInput();
-  const touch = createTouchInput();
-  let tilt = null;
-  if (steeringMode === 'tilt') {
-    tilt = createTiltInput();
+  if (flyBtn) {
+    flyBtn.addEventListener('touchstart', () => { keys.fly = true; }, false);
+    flyBtn.addEventListener('touchend', () => { keys.fly = false; }, false);
+    flyBtn.addEventListener('mousedown', () => { keys.fly = true; });
+    flyBtn.addEventListener('mouseup', () => { keys.fly = false; });
+    flyBtn.addEventListener('mouseleave', () => { keys.fly = false; });
   }
+
+  window.addEventListener('keydown', onKeyDown, false);
+  window.addEventListener('keyup', onKeyUp, false);
 
   return {
-    getSteer() {
-      if (steeringMode === 'tilt' && tilt) return tilt.getSteer();
-      return touch.getSteer() || keyboard.getSteer();
-    },
-    getAccel() {
-      return keyboard.getAccel() || touch.getAccel() || (tilt && tilt.getAccel());
-    },
-    getBrake() {
-      return keyboard.getBrake() || touch.getBrake() || (tilt && tilt.getBrake());
-    },
-    destroy() {
-      keyboard.destroy();
-      if (tilt) tilt.destroy();
+    getLeft: () => keys.left,
+    getRight: () => keys.right,
+    getFly: () => {
+      const val = keys.fly;
+      keys.fly = false; // Reset after reading
+      return val;
     },
   };
 }

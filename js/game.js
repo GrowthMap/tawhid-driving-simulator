@@ -1,128 +1,101 @@
-/**
- * Car physics (arcade-style), collision, level load
- */
-
-const CAR = {
-  power: 280,
-  brakePower: 320,
-  steerSpeed: 4.8,  // Enhanced steering for better control, left/right more responsive
-  maxSpeed: 50,
-  friction: 0.98,
-  width: 1.8,
-  depth: 3.5,
+// Simple lane-based car physics
+export const CAR = {
+  speed: 0.13,        // Units per millisecond (13 units/second)
+  laneWidth: 4,
+  laneChangeSpeed: 0.006, // Units per millisecond
 };
 
-export function createCarState() {
+export function createCar() {
   return {
-    x: 0,
+    lane: 1,           // 0=left, 1=center, 2=right
+    x: 0,              // Lane 0: -4, Lane 1: 0, Lane 2: +4
     z: 0,
-    vx: 0,
-    vz: 0,
-    heading: 0,
-    speed: 0,
+    flying: false,
+    flyTimer: 0,
+    maxFlyTime: 2000,  // 2 seconds in milliseconds
   };
 }
 
-export function resetCarToSpawn(car, spawn) {
-  car.x = spawn.x;
-  car.z = spawn.z;
-  car.vx = 0;
-  car.vz = 0;
-  car.heading = spawn.heading ?? 0;
-  car.speed = 0;
+export function resetCar(car) {
+  car.lane = 1;
+  car.x = 0;
+  car.z = 0;
+  car.flying = false;
+  car.flyTimer = 0;
 }
 
-export function updateCarPhysics(car, steer, accel, brake, dt) {
-  const h = car.heading;
-  const cos = Math.cos(h);
-  const sin = Math.sin(h);
+export function updateCar(car, dt, moveLeft, moveRight, doFly) {
+  // Handle lane changes
+  if (moveLeft && car.lane > 0) {
+    car.lane--;
+    console.log('Lane LEFT:', car.lane);
+  }
+  if (moveRight && car.lane < 2) {
+    car.lane++;
+    console.log('Lane RIGHT:', car.lane);
+  }
 
-  // forward/backward forces
-  const forwardAccel = (accel * CAR.power - brake * CAR.brakePower) * dt * 0.001;
-  car.vx += sin * forwardAccel;
-  car.vz += cos * forwardAccel;
+  // Smoothly move car to target lane X position
+  const targetX = car.lane * 4 - 4;
+  if (car.x < targetX) {
+    car.x = Math.min(car.x + CAR.laneChangeSpeed * dt, targetX);
+  } else if (car.x > targetX) {
+    car.x = Math.max(car.x - CAR.laneChangeSpeed * dt, targetX);
+  }
 
-  // steering: left arrow = turn left, forward+left = drive at an angle (≈45° when combined)
-  const speed = Math.sqrt(car.vx * car.vx + car.vz * car.vz);
-  car.speed = speed;
-  const steerFactor = Math.min(1, speed / 4 + 0.4);  // turn in place when slow, full steer when moving
-  const steerAmount = steer * CAR.steerSpeed * dt * 0.001 * steerFactor;
-  car.heading += steerAmount;
+  // Move forward
+  car.z += CAR.speed * dt;
 
-  // apply velocity
-  car.x += car.vx * dt * 0.001;
-  car.z += car.vz * dt * 0.001;
+  // Handle flying
+  if (doFly && !car.flying) {
+    car.flying = true;
+    car.flyTimer = car.maxFlyTime;
+    console.log('FLYING!');
+  }
 
-  // friction
-  car.vx *= CAR.friction;
-  car.vz *= CAR.friction;
-
-  // speed cap
-  if (car.speed > CAR.maxSpeed) {
-    const scale = CAR.maxSpeed / car.speed;
-    car.vx *= scale;
-    car.vz *= scale;
-    car.speed = CAR.maxSpeed;
+  if (car.flying) {
+    car.flyTimer -= dt;
+    if (car.flyTimer <= 0) {
+      car.flying = false;
+    }
   }
 }
 
-// Car as box; obstacle as box. Simple AABB (car and obstacle in world, car heading for car extent)
-export function carVsObstacles(car, obstacles) {
-  const halfW = CAR.width / 2;
-  const halfD = CAR.depth / 2;
-  const cos = Math.cos(car.heading);
-  const sin = Math.sin(car.heading);
-  const cx = car.x;
-  const cz = car.z;
+export function checkCollisions(car, obstacles) {
+  // Car collision box
+  const carLeft = car.x - 1;
+  const carRight = car.x + 1;
+  const carTop = car.z - 1;
+  const carBottom = car.z + 2;
 
-  for (const o of obstacles) {
-    const ow = (o.width ?? 2) / 2;
-    const od = (o.depth ?? 2) / 2;
-    const ox = o.x;
-    const oz = o.z;
-    if (boxVsBox(cx, cz, halfW, halfD, cos, sin, ox, oz, ow, od)) {
+  for (let obs of obstacles) {
+    if (car.flying) continue; // Can't collide while flying
+
+    const obsLeft = obs.x - 1;
+    const obsRight = obs.x + 1;
+    const obsTop = obs.z - 1;
+    const obsBottom = obs.z + 1;
+
+    // AABB collision check
+    if (carRight > obsLeft && carLeft < obsRight &&
+        carBottom > obsTop && carTop < obsBottom) {
       return true;
     }
   }
   return false;
 }
 
-function boxVsBox(cx, cz, hw, hd, cos, sin, ox, oz, ow, od) {
-  // transform obstacle corners into car-local space and check AABB
-  const dx = ox - cx;
-  const dz = oz - cz;
-  const localX = dx * cos + dz * sin;
-  const localZ = -dx * sin + dz * cos;
-  const obLocalW = Math.abs(ow * cos) + Math.abs(od * sin);
-  const obLocalD = Math.abs(ow * sin) + Math.abs(od * cos);
-  if (Math.abs(localX) < hw + obLocalW && Math.abs(localZ) < hd + obLocalD) {
-    return true;
-  }
-  return false;
+export function checkOffRoad(car) {
+  // Road bounds: x from -6 to 6 (3 lanes of width 4)
+  return car.x < -6 || car.x > 6;
 }
 
-export function carInFinishZone(car, finish) {
-  const hw = finish.width / 2;
-  const hd = finish.depth / 2;
-  return (
-    car.x >= finish.x - hw &&
-    car.x <= finish.x + hw &&
-    car.z >= finish.z - hd &&
-    car.z <= finish.z + hd
-  );
-}
-
-// World bounds: sides → crash. Endless road, so no end check
-export function carLeavesRoad(car, roadWidth) {
-  const hw = roadWidth / 2;
-  return car.x < -hw || car.x > hw;
-}
-
-// Endless mode: no end reached
-export function carReachedEnd(car, levelData) {
-  return false;
-}
-
-export function getSpeedKmh(car) {
-  return Math.round(car.speed * 3.6);
+export function spawnObstacle(z) {
+  const lanes = [0, 1, 2];
+  const lane = lanes[Math.floor(Math.random() * lanes.length)];
+  return {
+    lane: lane,
+    x: lane * 4 - 4,
+    z: z,
+  };
 }

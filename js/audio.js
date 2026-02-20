@@ -1,49 +1,91 @@
 /**
- * Audio system: engine sound, coin pickup, crash, bgm
+ * Audio system: background music, engine sound, coin pickup, crash
  * Uses Web Audio API to synthesize sounds procedurally
  */
 
 let audioContext = null;
+let masterGain = null;
 let engineOscillator = null;
 let engineGain = null;
-let masterGain = null;
+let engineFilter = null;
+let musicTimeout = null;
 
 export function initAudio() {
   if (audioContext) return;
   audioContext = new (window.AudioContext || window.webkitAudioContext)();
   masterGain = audioContext.createGain();
-  masterGain.gain.value = 0.3;
+  masterGain.gain.value = 0.25;
   masterGain.connect(audioContext.destination);
+  startBackgroundMusic();
+}
+
+function startBackgroundMusic() {
+  if (!audioContext) return;
+  // Simple looping bass line
+  const bassFreqs = [110, 110, 132, 110]; // A2, A2, C#3, A2
+  const beatDuration = 0.4;
+  let beatIndex = 0;
+  
+  function playBeat() {
+    if (!audioContext) return;
+    const now = audioContext.currentTime;
+    const freq = bassFreqs[beatIndex % bassFreqs.length];
+    
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    osc.connect(gain);
+    gain.connect(masterGain);
+    
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + beatDuration);
+    
+    osc.start(now);
+    osc.stop(now + beatDuration);
+    
+    beatIndex++;
+    musicTimeout = setTimeout(playBeat, beatDuration * 1000);
+  }
+  playBeat();
 }
 
 export function playEngineSound(speed) {
-  if (!audioContext) return;
-  
-  // Stop existing oscillator
-  if (engineOscillator) {
-    try {
-      engineOscillator.stop();
-    } catch (e) {}
-  }
-
-  if (speed < 0.5) {
-    if (engineGain) engineGain.gain.value = 0;
+  if (!audioContext || speed < 0.2) {
+    if (engineGain) {
+      engineGain.gain.setTargetAtTime(0.001, audioContext.currentTime, 0.15);
+    }
     return;
   }
 
-  const baseFreq = 150 + speed * 30; // 150-1500 Hz range based on speed
-  
+  const now = audioContext.currentTime;
   if (!engineOscillator || !engineGain) {
     engineOscillator = audioContext.createOscillator();
+    engineFilter = audioContext.createBiquadFilter();
     engineGain = audioContext.createGain();
-    engineOscillator.connect(engineGain);
+    
+    engineOscillator.type = 'triangle';
+    engineFilter.type = 'lowpass';
+    engineFilter.frequency.value = 800;
+    engineFilter.Q.value = 1;
+    
+    engineOscillator.connect(engineFilter);
+    engineFilter.connect(engineGain);
     engineGain.connect(masterGain);
-    engineOscillator.type = 'sawtooth';
+    
     engineOscillator.start();
   }
 
-  engineOscillator.frequency.setTargetAtTime(baseFreq, audioContext.currentTime, 0.05);
-  engineGain.gain.setTargetAtTime(speed * 0.08, audioContext.currentTime, 0.05);
+  // Smooth frequency change based on speed (200-800 Hz)
+  const baseFreq = 200 + speed * 15;
+  engineOscillator.frequency.setTargetAtTime(baseFreq, now, 0.08);
+  
+  // Filter increases with speed
+  engineFilter.frequency.setTargetAtTime(600 + speed * 40, now, 0.1);
+  
+  // Subtle volume based on speed
+  const volume = Math.min(0.04, speed * 0.02);
+  engineGain.gain.setTargetAtTime(volume, now, 0.1);
 }
 
 export function stopEngineSound() {
