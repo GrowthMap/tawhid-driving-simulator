@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Driving Simulator</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Main Menu -->
+    <section id="main-menu" class="screen">
+      <h1>Driving Simulator</h1>
+      <div class="menu-buttons">
+        <button id="btn-play">Play</button>
+        <button id="btn-settings">Settings</button>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section id="settings" class="screen hidden">
+      <h2>Settings</h2>
+      <div class="setting-row">
+        <label>Steering</label>
+        <div class="toggle-group">
+          <button id="steer-touch" class="toggle-btn">Touch</button>
+          <button id="steer-tilt" class="toggle-btn">Tilt</button>
+        </div>
+      </div>
+      <button id="btn-settings-back">Back</button>
+    </section>
+
+    <!-- Level Select -->
+    <section id="level-select" class="screen hidden">
+      <h2>Select Level</h2>
+      <div id="level-buttons" class="level-buttons"></div>
+      <button id="btn-level-back">Back</button>
+    </section>
+
+    <!-- Game (canvas + HUD) -->
+    <section id="game-screen" class="screen hidden">
+      <canvas id="game-canvas"></canvas>
+      <div id="hud">
+        <div id="speed-display">0 km/h</div>
+        <button id="btn-restart">Restart</button>
+        <button id="btn-pause">Pause</button>
+      </div>
+      <!-- Touch controls (shown when steering mode is touch) -->
+      <div id="touch-controls" class="hidden">
+        <div id="steer-left" class="touch-btn left">◀</div>
+        <div id="steer-right" class="touch-btn right">▶</div>
+        <div id="gas" class="touch-btn gas">GAS</div>
+        <div id="brake" class="touch-btn brake">BRAKE</div>
+      </div>
+      <!-- Result overlay -->
+      <div id="result-overlay" class="hidden">
+        <div id="result-message"></div>
+        <button id="btn-retry">Retry</button>
+        <button id="btn-level-select">Level Select</button>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
