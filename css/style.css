@@ -136,14 +136,41 @@ button:disabled {
   padding: 0.5rem 1rem;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1rem;
   background: rgba(0, 0, 0, 0.5);
+}
+
+.hud-left,
+.hud-center,
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-direction: column;
+}
+
+.hud-center {
+  flex: 1;
+  text-align: center;
 }
 
 #speed-display {
   font-size: 1.1rem;
   font-weight: 600;
   color: #e94560;
+}
+
+#score-display {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #28a745;
+}
+
+#coins-display {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffcc00;
 }
 
 #hud button {

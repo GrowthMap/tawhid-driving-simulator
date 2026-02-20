@@ -30,20 +30,20 @@
       <button id="btn-settings-back">Back</button>
     </section>
 
-    <!-- Level Select -->
-    <section id="level-select" class="screen hidden">
-      <h2>Select Level</h2>
-      <div id="level-buttons" class="level-buttons"></div>
-      <button id="btn-level-back">Back</button>
-    </section>
-
     <!-- Game (canvas + HUD) -->
     <section id="game-screen" class="screen hidden">
       <canvas id="game-canvas"></canvas>
       <div id="hud">
-        <div id="speed-display">0 km/h</div>
-        <button id="btn-restart">Restart</button>
-        <button id="btn-pause">Pause</button>
+        <div class="hud-left">
+          <div id="speed-display">0 km/h</div>
+        </div>
+        <div class="hud-center">
+          <div id="score-display">Score: 0</div>
+          <div id="coins-display">Coins: 0</div>
+        </div>
+        <div class="hud-right">
+          <button id="btn-pause">Pause</button>
+        </div>
       </div>
       <!-- Touch controls (shown when steering mode is touch) -->
       <div id="touch-controls" class="hidden">
@@ -56,7 +56,7 @@
       <div id="result-overlay" class="hidden">
         <div id="result-message"></div>
         <button id="btn-retry">Retry</button>
-        <button id="btn-level-select">Level Select</button>
+        <button id="btn-level-select">Menu</button>
       </div>
     </section>
   </div>

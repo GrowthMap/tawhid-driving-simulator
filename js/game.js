@@ -5,8 +5,8 @@
 const CAR = {
   power: 280,
   brakePower: 320,
-  steerSpeed: 4.2,  // responsive: left/right turns clearly; forward+left ≈ 45° diagonal
-  maxSpeed: 45,
+  steerSpeed: 4.8,  // Enhanced steering for better control, left/right more responsive
+  maxSpeed: 50,
   friction: 0.98,
   width: 1.8,
   depth: 3.5,
@@ -112,21 +112,15 @@ export function carInFinishZone(car, finish) {
   );
 }
 
-// World bounds: sides and behind start → crash. Far end = level complete (see carReachedEnd).
-export function carLeavesRoad(car, levelData) {
-  const hw = levelData.roadWidth / 2;
-  const hl = levelData.roadLength / 2;
-  return (
-    car.x < -hw ||
-    car.x > hw ||
-    car.z < -hl
-  );
+// World bounds: sides → crash. Endless road, so no end check
+export function carLeavesRoad(car, roadWidth) {
+  const hw = roadWidth / 2;
+  return car.x < -hw || car.x > hw;
 }
 
-// Reached the end of the road (far end) → level complete
+// Endless mode: no end reached
 export function carReachedEnd(car, levelData) {
-  const hl = levelData.roadLength / 2;
-  return car.z >= hl;
+  return false;
 }
 
 export function getSpeedKmh(car) {

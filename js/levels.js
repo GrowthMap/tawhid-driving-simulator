@@ -1,7 +1,45 @@
-// Level data: road, obstacles (block center and sides so player must steer), spawn
-// x, z in world units; heading in radians (0 = +Z)
-// Obstacles are placed across the lane (left, center, right) so going straight hits them.
+/**
+ * Endless road generation: procedural obstacles and coins
+ */
 
+// Endless game configuration
+export const ENDLESS_CONFIG = {
+  roadWidth: 12,
+  spawn: { x: 0, z: -50, heading: 0 },
+};
+
+// Generate obstacles for a segment of the road
+export function generateObstacles(zStart, zEnd, roadWidth) {
+  const obstacles = [];
+  const obstacleDensity = 0.08; // Obstacles per unit distance
+  const targetCount = Math.ceil((zEnd - zStart) * obstacleDensity);
+  
+  for (let i = 0; i < targetCount; i++) {
+    const z = zStart + Math.random() * (zEnd - zStart);
+    const side = Math.random();
+    let x;
+    
+    // Place obstacles on left, center, or right
+    if (side < 0.33) {
+      x = -roadWidth * 0.25 + Math.random() * 2;
+    } else if (side < 0.66) {
+      x = roadWidth * 0.25 + Math.random() * 2;
+    } else {
+      x = Math.random() * 4 - 2;
+    }
+    
+    obstacles.push({
+      x,
+      z,
+      width: 2 + Math.random() * 0.5,
+      depth: 2 + Math.random() * 0.5,
+    });
+  }
+  
+  return obstacles;
+}
+
+// Legacy levels (kept for compatibility, but game uses endless mode)
 export const LEVELS = [
   // Level 1: obstacles alternate left / center / right so you must steer
   {
